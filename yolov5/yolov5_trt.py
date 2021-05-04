@@ -13,8 +13,6 @@ import numpy as np
 import pycuda.autoinit
 import pycuda.driver as cuda
 import tensorrt as trt
-import torch
-import torchvision
 
 CONF_THRESH = 0.5
 IOU_THRESHOLD = 0.4
@@ -258,7 +256,7 @@ class YoLov5TRT(object):
         return:
             y:          A boxes tensor, each row is a box [x1, y1, x2, y2]
         """
-        y = torch.zeros_like(x) if isinstance(x, torch.Tensor) else np.zeros_like(x)
+        y = np.zeros_like(x)
         r_w = self.input_w / origin_w
         r_h = self.input_h / origin_h
         if r_h > r_w:
@@ -292,8 +290,8 @@ class YoLov5TRT(object):
         num = int(output[0])
         # Reshape to a two dimentional ndarray
         pred = np.reshape(output[1:], (-1, 6))[:num, :]
-        # to a torch Tensor
-        pred = torch.Tensor(pred).cuda()
+        # to a torch Tensor NOPE: charlie
+        #pred = torch.Tensor(pred).cuda()
         # Get the boxes
         boxes = pred[:, :4]
         # Get the scores
@@ -308,12 +306,44 @@ class YoLov5TRT(object):
         # Trandform bbox from [center_x, center_y, w, h] to [x1, y1, x2, y2]
         boxes = self.xywh2xyxy(origin_h, origin_w, boxes)
         # Do nms
-        indices = torchvision.ops.nms(boxes, scores, iou_threshold=IOU_THRESHOLD).cpu()
-        result_boxes = boxes[indices, :].cpu()
-        result_scores = scores[indices].cpu()
-        result_classid = classid[indices].cpu()
+        indices = nms(boxes, scores, IOU_THRESHOLD)
+        result_boxes = boxes[indices, :]
+        result_scores = scores[indices]
+        result_scores = scores[indices]
+        result_classid = classid[indices]
         return result_boxes, result_scores, result_classid
 
+def nms(dets, scores, thresh):
+    '''
+    dets is a numpy array : num_dets, 4
+    scores ia  nump array : num_dets,
+    '''
+    x1 = dets[:, 0]
+    y1 = dets[:, 1]
+    x2 = dets[:, 2]
+    y2 = dets[:, 3]
+
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = scores.argsort()[::-1] # get boxes with more ious first
+
+    keep = []
+    while order.size > 0:
+        i = order[0] # pick maxmum iou box
+        keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        w = np.maximum(0.0, xx2 - xx1 + 1) # maximum width
+        h = np.maximum(0.0, yy2 - yy1 + 1) # maxiumum height
+        inter = w * h
+        ovr = inter / (areas[i] + areas[order[1:]] - inter)
+
+        inds = np.where(ovr <= thresh)[0]
+        order = order[inds + 1]
+
+    return keep
 
 class inferThread(threading.Thread):
     def __init__(self, yolov5_wrapper, image_path_batch):
