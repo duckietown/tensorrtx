@@ -175,7 +175,7 @@ class YoLov5TRT(object):
                     box,
                     batch_image_raw[i],
                     label="{}:{:.2f}".format(
-                        categories[int(result_classid[j])], result_scores[j]
+                        CATEGORIES[int(result_classid[j])], result_scores[j]
                     ),
                 )
         return batch_image_raw, end - start
@@ -355,10 +355,10 @@ class inferThread(threading.Thread):
         batch_image_raw, use_time = self.yolov5_wrapper.infer(self.yolov5_wrapper.get_raw_image(self.image_path_batch))
         for i, img_path in enumerate(self.image_path_batch):
             parent, filename = os.path.split(img_path)
-            save_name = os.path.join('output', filename)
+            save_name = os.path.join(OUTPUT_DIR, filename)
             # Save image
             cv2.imwrite(save_name, batch_image_raw[i])
-        print('input->{}, time->{:.2f}ms, saving into output/'.format(self.image_path_batch, use_time * 1000))
+        print('input->{}, time->{:.2f}ms, saving into '.format(self.image_path_batch, use_time * 1000)+OUTPUT_DIR)
 
 
 class warmUpThread(threading.Thread):
@@ -374,11 +374,14 @@ class warmUpThread(threading.Thread):
 
 if __name__ == "__main__":
     # load custom plugins
-    PLUGIN_LIBRARY = "build/libmyplugins.so"
-    engine_file_path = "build/best.wts.engine"
+    PLUGIN_LIBRARY = "libmyplugins.so"
+    ENGINE_FILE_PATH = "engine.trt"
+    CATEGORIES = ["duckie", "cone", "truck", "bus"]
+    IMAGE_DIR = "samples/"
+    OUTPUT_DIR = "output"
 
     if len(sys.argv) > 1:
-        engine_file_path = sys.argv[1]
+        ENGINE_FILE_PATH = sys.argv[1]
     if len(sys.argv) > 2:
         PLUGIN_LIBRARY = sys.argv[2]
 
@@ -386,18 +389,16 @@ if __name__ == "__main__":
 
     # load coco labels
 
-    categories = ["duckie", "cone", "truck", "bus"]
 
-    if os.path.exists('output/'):
-        shutil.rmtree('output/')
-    os.makedirs('output/')
+    if os.path.exists(OUTPUT_DIR):
+        shutil.rmtree(OUTPUT_DIR)
+    os.makedirs(OUTPUT_DIR)
     # a YoLov5TRT instance
-    yolov5_wrapper = YoLov5TRT(engine_file_path)
+    yolov5_wrapper = YoLov5TRT(ENGINE_FILE_PATH)
     try:
         print('batch size is', yolov5_wrapper.batch_size)
-        
-        image_dir = "samples/"
-        image_path_batches = get_img_path_batches(yolov5_wrapper.batch_size, image_dir)
+
+        image_path_batches = get_img_path_batches(yolov5_wrapper.batch_size, IMAGE_DIR)
 
         for i in range(10):
             # create a new thread to do warm_up
