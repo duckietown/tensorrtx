@@ -363,6 +363,7 @@ def nms(dets, scores, thresh):
     return keep
 
 if __name__ == "__main__":
+    # TODO WARNING! THIS INFERENCE SCRIPT REQUIRES A libmyplugins.so AND AN engine FILE!
     # load custom plugins
     PLUGIN_LIBRARY = "./libmyplugins.so"
     ctypes.CDLL(PLUGIN_LIBRARY) # THIS IS NEEDED! DON'T REMOVE IT!
